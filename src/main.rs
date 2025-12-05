@@ -1,4 +1,4 @@
-mod db;
+// mod db;
 
 use std::collections::HashMap;
 use std::env;
@@ -15,15 +15,12 @@ use chrono::prelude::*;
 use tracing::info;
 use sqlx::{FromRow, Sqlite, SqlitePool};
 
-type Db = Arc<RwLock<HashMap<i64, Entry>>>;
-
 #[tokio::main]
 async fn main() {
     // initialize tracing
     tracing_subscriber::fmt::init();
     tracing::info!("Starting server...");
 
-    let db = Db::default();
     let database_url = env::var("DATABASE_URL").unwrap_or("sqlite:brag.db?mode=rwc".to_string());
     let pool = SqlitePool::connect(&database_url).await.expect("Can't connect to database");
 
@@ -38,7 +35,7 @@ async fn main() {
         .route("/", get(get_entries))
         // `POST /entries` goes to `create_entry`
         .route("/entries", post(create_entry))
-        //.route("/entries/{id}", delete(delete_entry) )
+        .route("/entries/{id}", delete(delete_entry) )
         .with_state(pool);
 
     // run our app with hyper, listening globally on port 3000
@@ -47,16 +44,13 @@ async fn main() {
 }
 
 // basic handler that responds with a static string
-async fn get_entries(State(pool): State<SqlitePool>) -> Result<Json<Vec<Entry>>,StatusCode> {
-    //let m = db.read().unwrap();
-    let result: Vec<Entry> = sqlx::query_as("SELECT id, description, link, date FROM entries")
-        .fetch_all(&pool).await.map_err(|e| {
-        tracing::error!("Failed to fetch entries: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
-    Ok(Json(result))
-
+async fn get_entries(State(pool): State<SqlitePool>) -> (StatusCode, Json<Vec<Entry>>) {
+    let result = sqlx::query_as("SELECT id, description, link, date FROM entries")
+        .fetch_all(&pool).await;
+    match result {
+        Ok(entries) => (StatusCode::OK, Json(entries)),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, Json(Vec::new())),
+    }
 }
 
 async fn create_entry(
@@ -73,7 +67,10 @@ async fn create_entry(
         .bind(date)
         .execute(&pool)
         .await
-        .map_err(|e| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Failed to create entry: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        } )?;
 
     let entry_id = result.last_insert_rowid();
     let entry = Entry {
@@ -89,13 +86,14 @@ async fn create_entry(
 
 }
 
-// async fn delete_entry(Path(id): Path<i64>, State(pool): State<SqlitePool>) -> StatusCode {
-//     let mut w = db.write().unwrap();
-//     w.remove(&id);
-//     info!("{w:?}");
-//     StatusCode::FOUND
-//
-// }
+async fn delete_entry(Path(id): Path<i64>, State(pool): State<SqlitePool>) -> StatusCode {
+    let result = sqlx::query("DELETE FROM entries WHERE id = ?").bind(id).execute(&pool).await.map_err(|e| {
+        tracing::error!("Failed to delete entry: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    });
+    StatusCode::OK
+
+}
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct Collaborator {
     id: i64,
