@@ -8,10 +8,12 @@ use axum::{
     routing::{get, post},
 };
 use chrono::prelude::*;
-use sqlx::SqlitePool;
 use std::env;
+pub mod errors;
 mod models;
 use models::{CreateEntry, Entry};
+mod db;
+use db::DB;
 
 #[tokio::main]
 async fn main() {
@@ -20,14 +22,10 @@ async fn main() {
     tracing::info!("Starting server...");
 
     let database_url = env::var("DATABASE_URL").unwrap_or("sqlite:brag.db?mode=rwc".to_string());
-    let pool = SqlitePool::connect(&database_url)
-        .await
-        .expect("Can't connect to database");
 
-    sqlx::migrate!("./migrations")
-        .run(&pool)
+    let db = DB::new(database_url)
         .await
-        .expect("Failed to run migrations");
+        .expect("Cannot connect to the database.");
 
     // build our application with a route
     let app = Router::new()
