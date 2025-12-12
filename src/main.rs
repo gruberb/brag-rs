@@ -8,12 +8,10 @@ use axum::{
     routing::{get, post},
 };
 use chrono::prelude::*;
-use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, SqlitePool};
-// use std::collections::HashMap;
+use sqlx::SqlitePool;
 use std::env;
-// use std::sync::{Arc, RwLock};
-// use tracing::info;
+mod models;
+use models::{CreateEntry, Entry};
 
 #[tokio::main]
 async fn main() {
@@ -97,27 +95,4 @@ async fn delete_entry(Path(id): Path<i64>, State(pool): State<SqlitePool>) -> St
             StatusCode::INTERNAL_SERVER_ERROR
         });
     StatusCode::OK
-}
-// #[derive(Deserialize, Serialize, Clone, Debug)]
-// struct Collaborator {
-//     id: i64,
-//     name: String,
-//     team: String,
-// }
-
-#[derive(Deserialize, Serialize, Clone, Debug, FromRow)]
-struct Entry {
-    id: i64,
-    description: String,
-    //collaborators: Vec<Collaborator>,
-    link: Option<String>,
-    date: i64,
-}
-
-// the input to our `create_entry` handler
-#[derive(Deserialize)]
-struct CreateEntry {
-    description: String,
-    //collaborators: Vec<Collaborator>,
-    link: Option<String>,
 }
